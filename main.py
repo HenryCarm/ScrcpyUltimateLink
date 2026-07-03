@@ -1,101 +1,95 @@
-import flet as ft
+import sys
 import subprocess
 import threading
 import socket
-import os
-import sys
-from heartbeat_listener import listen_for_heartbeat, start_scrcpy
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow
+from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from heartbeat_listener import start_scrcpy
 
-def main(page: ft.Page):
-    try:
-        page.title = "Scrcpy Ultimate Link 🎀✨"
-        page.window_width = 450
-        page.window_height = 600
-        page.theme_mode = ft.ThemeMode.LIGHT
-        page.vertical_alignment = ft.MainAxisAlignment.CENTER
-        page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-        page.bgcolor = "#FFF0F5" # Lavender Blush for a cute vibe! 🌸
+class HeartbeatWorker(QObject):
+    heartbeat_received = pyqtSignal(str)
+    log_signal = pyqtSignal(str)
 
-        # UI Components
-        status_text = ft.Text(
-            "Status: Waiting for Henny's phone... 🥺", 
-            size=20, 
-            weight=ft.FontWeight.BOLD, 
-            color="#FF69B4" # Hot Pink! 💖
-        )
-        
-        heart_icon = ft.Icon(icon="favorite", color="#FF1493", size=100)
-        
-        log_area = ft.Column(
-            scroll=ft.ScrollMode.ALWAYS,
-            expand=True,
-            controls=[ft.Text("Logs: ", weight=ft.FontWeight.BOLD)]
-        )
-
-        def add_log(message):
-            log_area.controls.append(ft.Text(message, size=12))
-            page.update()
-
-        def run_listener():
-            # We'll wrap the listener to update the UI
-            # Since the original listener was a blocking while loop, 
-            # we'll implement a modified version for Flet here.
+    def run(self):
+        try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.bind(("0.0.0.0", 5556))
-            
             while True:
                 data, addr = sock.recvfrom(1024)
-                message = data.decode('utf-8').strip()
                 ip = addr[0]
-                
+                message = data.decode('utf-8').strip()
                 if "HELLO_HENNY" in message:
-                    status_text.value = f"💓 Heartbeat from {ip}! Connecting... ✨"
-                    heart_icon.scale = 1.2 # Cute little pulse!
-                    page.update()
-                    
-                    if start_scrcpy(ip):
-                        status_text.value = "🚀 Scrcpy Launched! Enjoy, Henny! 💖"
-                        heart_icon.color = "#00FF00" # Turns green on success!
-                        add_log(f"✨ Successfully connected to {ip}")
-                    else:
-                        status_text.value = "🥺 Connection failed... 🎀"
-                        add_log(f"❌ Failed to connect to {ip}")
-                    
-                    page.update()
-                    heart_icon.scale = 1.0
-                    page.update()
+                    self.heartbeat_received.emit(ip)
+        except Exception as e:
+            self.log_signal.emit(f"Listener Error: {e}")
 
-        # Start listener in a background thread
-        threading.Thread(target=run_listener, daemon=True).start()
+class ScrcpyUltimateLink(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Scrcpy Ultimate Link 🎀✨")
+        self.setFixedSize(450, 600)
+        self.setStyleSheet("background-color: #FFF0F5;") # Lavender Blush 🌸
 
-        # Layout
-        page.add(
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("Scrcpy Ultimate Link", size=30, weight=ft.FontWeight.BOLD, color="#C71585", text_align=ft.TextAlign.CENTER),
-                    ft.Text("The '0 Seconds' Dream 🚀💖", size=16, italic=True, text_align=ft.TextAlign.CENTER),
-                    ft.Divider(height=20, color="transparent"),
-                    heart_icon,
-                    ft.Divider(height=20, color="transparent"),
-                    status_text,
-                    ft.Divider(height=20, color="transparent"),
-                    ft.Container(
-                        content=log_area,
-                        border_radius=10,
-                        padding=10,
-                        height=200,
-                        bgcolor="white"
-                    ),
-                    ft.Divider(height=20, color="transparent"),
-                    ft.Text("Stay cute, stay connected! 🎀✨", size=12, color="#DB7093", text_align=ft.TextAlign.CENTER),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                padding=20,
-                alignment=ft.Alignment.center
-            )
-        )
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR: {e}")
-        os._exit(1) # Kill the whole process instantly! 💥
+        # Main Layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Title
+        self.title = QLabel("Scrcpy Ultimate Link")
+        self.title.setStyleSheet("font-size: 30px; font-weight: bold; color: #C71585;")
+        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.subtitle = QLabel("The '0 Seconds' Dream 🚀💖")
+        self.subtitle.setStyleSheet("font-size: 16px; font-style: italic; color: #DB7093;")
+        self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Status
+        self.status_label = QLabel("Status: Waiting for heartbeat... 🥺")
+        self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #FF69B4;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Log Area
+        self.log_area = QTextEdit()
+        self.log_area.setReadOnly(True)
+        self.log_area.setStyleSheet("background-color: white; border: 1px solid #FFB6C1; border-radius: 10px; padding: 10px; font-size: 12px;")
+        self.log_area.setFixedHeight(200)
+        
+        layout.addWidget(self.title)
+        layout.addWidget(self.subtitle)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.log_area)
+
+        # Heartbeat Thread
+        self.worker = HeartbeatWorker()
+        self.thread = threading.Thread(target=self.worker.run, daemon=True)
+        self.worker.heartbeat_received.connect(self.handle_heartbeat)
+        self.worker.log_signal.connect(self.add_log)
+        self.thread.start()
+
+    def add_log(self, message):
+        self.log_area.append(message)
+
+    def handle_heartbeat(self, ip):
+        self.status_label.setText(f"💓 Found {ip}! Connecting... ✨")
+        self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #FF69B4;")
+        
+        # Run ADB in a separate thread to keep UI responsive
+        threading.Thread(target=self.connect_and_launch, args=(ip,), daemon=True).start()
+
+    def connect_and_launch(self, ip):
+        if start_scrcpy(ip):
+            self.status_label.setText("🚀 Launched! Enjoy, Henny! 💖")
+            self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #00FF00;")
+            self.add_log(f"✨ Successfully connected to {ip}")
+        else:
+            self.status_label.setText("🥺 Connection failed... 🎀")
+            self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #FF1493;")
+            self.add_log(f"❌ Failed to connect to {ip}")
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    app = QApplication(sys.argv)
+    window = ScrcpyUltimateLink()
+    window.show()
+    sys.exit(app.exec())
