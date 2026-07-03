@@ -16,6 +16,7 @@ jobs:
         run: |
           ls -la
           cat buildozer.spec
+          yes | sdkmanager --licenses || true
           echo "y" | buildozer android debug
 
       - name: Upload APK
