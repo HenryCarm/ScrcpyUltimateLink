@@ -15,6 +15,7 @@ jobs:
       - name: Build with Buildozer
         run: |
           ls -la
+          cat buildozer.spec
           buildozer android debug
 
       - name: Upload APK
