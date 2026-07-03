@@ -8,18 +8,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: ghcr.io/kivy/buildozer:latest
     steps:
       - uses: actions/checkout@v3
 
       - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        with:
-          buildozer_version: master
-          command: buildozer android debug
-          workdir: android
+        run: |
+          cd android
+          buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: scrcpy-heartbeat-apk
-          path: bin/*.apk
+          path: android/bin/*.apk
