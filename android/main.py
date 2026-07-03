@@ -57,16 +57,17 @@ class HeartbeatApp(App):
             self.label.text = "Hello Henny! 💖"
 
     def heartbeat_loop(self):
-        pc_ip = self.ip_input.text.strip()
         port = 5556
         message = "HELLO_HENNY 🎀✨"
         
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Enable broadcasting
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        broadcast_ip = "255.255.255.255"
         
         while self.sending:
             try:
-                sock.sendto(message.encode('utf-8'), (pc_ip, port))
-                # Small delay so we don't spam the network too hard
+                sock.sendto(message.encode('utf-8'), (broadcast_ip, port))
                 import time
                 time.sleep(5) 
             except Exception as e:
