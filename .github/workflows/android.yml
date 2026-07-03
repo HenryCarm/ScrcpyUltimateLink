@@ -12,13 +12,12 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Build with Buildozer
-        uses: kivy/buildozer-action@v1
-        with:
-          buildozer_version: master
-          command: buildozer android debug
+        run: |
+          pip install buildozer
+          buildozer android debug
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: scrcpy-heartbeat-apk
           path: bin/*.apk
