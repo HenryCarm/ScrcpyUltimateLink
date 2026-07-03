@@ -1,3 +1,4 @@
+[app]
 title = Scrcpy Heartbeat
 package.name = scrcpyheartbeat
 package.domain = org.henry.scrcpy
