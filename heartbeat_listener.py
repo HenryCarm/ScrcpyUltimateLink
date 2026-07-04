@@ -15,6 +15,9 @@ PHONE_ADB_PORT = 5555
 
 LOG_FILE = "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/heartbeat_debug.log"
 
+# Track if scrcpy is already running
+scrcpy_process = None
+
 def log(msg, also_print=True):
     """Write to both log file and stdout."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
@@ -37,21 +40,24 @@ def get_local_ip():
 
 def start_scrcpy(phone_ip=None):
     """Connects to the device and launches scrcpy."""
-    # Always use the known phone IP for ADB
-    ip = PHONE_ADB_IP
-    log(f"🚀 Connecting to phone at {ip}:{PHONE_ADB_PORT}...")
-    # Try connecting via ADB
-    result = subprocess.run(["adb", "connect", f"{ip}:{PHONE_ADB_PORT}"], capture_output=True, text=True)
+    global scrcpy_process
+    
+    # Check if scrcpy is already running
+    if scrcpy_process and scrcpy_process.poll() is None:
+        log("ℹ️  scrcpy already running, skipping launch")
+        return True
+    
+    log(f"🚀 Connecting to phone at {PHONE_ADB_IP}:{PHONE_ADB_PORT}...")
+    result = subprocess.run(["adb", "connect", f"{PHONE_ADB_IP}:{PHONE_ADB_PORT}"], capture_output=True, text=True)
     log(f"ADB connect stdout: {result.stdout.strip()}")
     log(f"ADB connect stderr: {result.stderr.strip()}")
     
-    if "connected to" in result.stdout.lower():
+    if "connected to" in result.stdout.lower() or "already connected" in result.stdout.lower():
         log(f"💖 Connected! Launching scrcpy... (｡♥‿♥｡)")
-        # Launch scrcpy in a separate process so it doesn't block the listener
-        subprocess.Popen([SCRCPY_BIN, "--audio-source=playback", "-s", f"{ip}:{PHONE_ADB_PORT}"])
+        scrcpy_process = subprocess.Popen([SCRCPY_BIN, "--audio-source=playback", "-s", f"{PHONE_ADB_IP}:{PHONE_ADB_PORT}"])
         return True
     else:
-        log(f"🥺 Failed to connect to {ip}. Is ADB over TCP enabled? 🎀")
+        log(f"🥺 Failed to connect to {PHONE_ADB_IP}. Is ADB over TCP enabled? 🎀")
         return False
 
 def listen_for_heartbeat():
@@ -92,7 +98,12 @@ def listen_for_heartbeat():
             
             if "HELLO_HENNY" in message:
                 log(f"🎯 VALID heartbeat from {ip}!")
-                if start_scrcpy(ip):
+                # Parse phone IP from message: "HELLO_HENNY 🎀✨|PHONE_IP"
+                phone_ip = PHONE_ADB_IP
+                if '|' in message:
+                    phone_ip = message.split('|')[-1]
+                    log(f"📱 Phone ADB IP from heartbeat: {phone_ip}")
+                if start_scrcpy(phone_ip):
                     log("✨ Success! Everything is mirrored! 🚀")
                 else:
                     log("🥺 Heartbeat was heard, but ADB connection failed. 🎀")

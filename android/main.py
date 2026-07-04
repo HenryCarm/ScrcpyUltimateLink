@@ -113,7 +113,7 @@ class HeartbeatApp(App):
             self.status_label.text = "Stopped"
 
     def heartbeat_loop(self):
-        message = "HELLO_HENNY 🎀✨"
+        message = f"HELLO_HENNY 🎀✨|{self.get_phone_ip()}"
         target_ip = self.discovered_pc_ip or self.pc_ip_input.text
         port = HEARTBEAT_PORT
         
@@ -133,6 +133,17 @@ class HeartbeatApp(App):
                 traceback.print_exc()
                 break
         sock.close()
+    
+    def get_phone_ip(self):
+        """Get phone's local IP."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "unknown"
 
 if __name__ == "__main__":
     HeartbeatApp().run()
