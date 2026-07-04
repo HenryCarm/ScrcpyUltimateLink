@@ -140,13 +140,18 @@ class HeartbeatApp(App):
         self.discovered_pc_ip = pc_ip  # Set this FIRST
         self.pc_ip_input.text = pc_ip
         self.status_label.text = f"Discovered PC: {pc_ip}:{heartbeat_port}"
+        # Only start heartbeat if not already sending
         if not self.sending:
-            # Auto-start heartbeat after discovery
             self.start_heartbeat()
+        else:
+            print(f"💓 Heartbeat already running to {self.discovered_pc_ip}, skipping")
 
     def start_heartbeat(self):
         if not self.discovered_pc_ip:
             print("No PC IP discovered yet, waiting...")
+            return
+        if self.sending:
+            print("Heartbeat already running!")
             return
         self.sending = True
         self.btn.text = "Stop Heartbeat 🥺"
@@ -198,6 +203,8 @@ class HeartbeatApp(App):
             except Exception as e:
                 retry_count += 1
                 print(f"❌ Heartbeat error (attempt {retry_count}/{max_retries}): {e}")
+                import traceback
+                traceback.print_exc()
                 
                 if retry_count >= max_retries:
                     print(f"💀 Max retries reached, stopping heartbeat")
