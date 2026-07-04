@@ -91,6 +91,7 @@ class HeartbeatApp(App):
                 break
 
     def update_discovered_ip(self, pc_ip, heartbeat_port):
+        self.discovered_pc_ip = pc_ip  # Set this FIRST
         self.pc_ip_input.text = pc_ip
         self.status_label.text = f"Discovered PC: {pc_ip}:{heartbeat_port}"
         if not self.sending:
@@ -98,6 +99,9 @@ class HeartbeatApp(App):
             self.start_heartbeat()
 
     def start_heartbeat(self):
+        if not self.discovered_pc_ip:
+            print("No PC IP discovered yet, waiting...")
+            return
         self.sending = True
         self.btn.text = "Stop Heartbeat 🥺"
         self.label.text = "Sending Love to PC... 💖✨"
