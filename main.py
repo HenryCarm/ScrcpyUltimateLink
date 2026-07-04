@@ -2,26 +2,105 @@ import sys
 import subprocess
 import threading
 import socket
+import time
+from datetime import datetime
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
-from heartbeat_listener import start_scrcpy
+from heartbeat_listener import start_scrcpy, get_local_ip, LOG_FILE
+
+DISCOVERY_PORT = 5557  # PC broadcasts HERE
+HEARTBEAT_PORT = 5556  # Phone sends heartbeats HERE
+
+def gui_log(msg):
+    """Write to both the log file and return for display."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    line = f"[{timestamp}] [GUI] {msg}"
+    with open(LOG_FILE, "a") as f:
+        f.write(line + "\n")
+    print(line, flush=True)
+    return line
+
+class DiscoveryBroadcaster:
+    """Broadcasts PC's presence so phone can discover it."""
+    def __init__(self, local_ip, port=DISCOVERY_PORT):
+        self.local_ip = local_ip
+        self.port = port
+        self.running = False
+        
+    def start(self):
+        self.running = True
+        threading.Thread(target=self._broadcast_loop, daemon=True).start()
+        
+    def stop(self):
+        self.running = False
+        
+    def _broadcast_loop(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        message = f"SCRCPC_HERE {self.local_ip} {HEARTBEAT_PORT}".encode()
+        
+        gui_log(f"📢 Starting discovery broadcast on port {self.port} (PC IP: {self.local_ip})")
+        
+        while self.running:
+            try:
+                # Broadcast to all interfaces
+                sock.sendto(message, ('255.255.255.255', self.port))
+                # Also send to each interface's broadcast
+                for ip in self._get_interface_ips():
+                    parts = ip.split('.')
+                    if len(parts) == 4:
+                        bcast = f"{parts[0]}.{parts[1]}.{parts[2]}.255"
+                        sock.sendto(message, (bcast, self.port))
+                time.sleep(3)
+            except Exception as e:
+                gui_log(f"⚠️  Broadcast error: {e}")
+                time.sleep(1)
+        sock.close()
+        
+    def _get_interface_ips(self):
+        """Get all non-loopback IPs."""
+        ips = []
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ips.append(s.getsockname()[0])
+            s.close()
+        except:
+            pass
+        return ips
 
 class HeartbeatWorker(QObject):
     heartbeat_received = pyqtSignal(str)
     log_signal = pyqtSignal(str)
 
     def run(self):
+        gui_log("HeartbeatWorker thread starting...")
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.bind(("0.0.0.0", 5556))
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("0.0.0.0", HEARTBEAT_PORT))
+            gui_log(f"✅ GUI listener bound to 0.0.0.0:{HEARTBEAT_PORT}")
+            sock.settimeout(5.0)
             while True:
-                data, addr = sock.recvfrom(1024)
-                ip = addr[0]
-                message = data.decode('utf-8').strip()
-                if "HELLO_HENNY" in message:
-                    self.heartbeat_received.emit(ip)
+                try:
+                    data, addr = sock.recvfrom(1024)
+                    ip = addr[0]
+                    message = data.decode('utf-8').strip()
+                    gui_log(f"💓 GUI got packet from {ip}:{addr[1]} → '{message}'")
+                    if "HELLO_HENNY" in message:
+                        gui_log(f"🎯 VALID heartbeat from {ip}")
+                        self.heartbeat_received.emit(ip)
+                    else:
+                        gui_log(f"⚠️  Ignoring non-HELLO: '{message}'")
+                except socket.timeout:
+                    gui_log(f"⏳ GUI heartbeat thread still alive (port {HEARTBEAT_PORT})...")
         except Exception as e:
+            gui_log(f"❌ GUI Listener Error: {e}")
             self.log_signal.emit(f"Listener Error: {e}")
+
+    def gui_log(self, msg):
+        """Emit log to GUI widget."""
+        self.log_signal.emit(msg)
 
 class ScrcpyUltimateLink(QMainWindow):
     def __init__(self):
@@ -61,6 +140,11 @@ class ScrcpyUltimateLink(QMainWindow):
         layout.addWidget(self.status_label)
         layout.addWidget(self.log_area)
 
+        # Start discovery broadcaster
+        local_ip = get_local_ip()
+        self.discovery = DiscoveryBroadcaster(local_ip)
+        self.discovery.start()
+        
         # Heartbeat Thread
         self.worker = HeartbeatWorker()
         self.thread = threading.Thread(target=self.worker.run, daemon=True)
@@ -70,12 +154,12 @@ class ScrcpyUltimateLink(QMainWindow):
 
     def add_log(self, message):
         self.log_area.append(message)
+        scrollbar = self.log_area.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def handle_heartbeat(self, ip):
         self.status_label.setText(f"💓 Found {ip}! Connecting... ✨")
         self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #FF69B4;")
-        
-        # Run ADB in a separate thread to keep UI responsive
         threading.Thread(target=self.connect_and_launch, args=(ip,), daemon=True).start()
 
     def connect_and_launch(self, ip):
@@ -87,6 +171,11 @@ class ScrcpyUltimateLink(QMainWindow):
             self.status_label.setText("🥺 Connection failed... 🎀")
             self.status_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #FF1493;")
             self.add_log(f"❌ Failed to connect to {ip}")
+
+    def closeEvent(self, event):
+        if hasattr(self, 'discovery'):
+            self.discovery.stop()
+        super().closeEvent(event)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
