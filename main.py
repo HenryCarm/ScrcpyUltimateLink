@@ -8,6 +8,8 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdi
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from heartbeat_listener import start_scrcpy, get_local_ip, LOG_FILE
 
+APP_VERSION = "4.26.7"
+
 DISCOVERY_PORT = 5557  # PC broadcasts HERE
 HEARTBEAT_PORT = 5556  # Phone sends heartbeats HERE
 
