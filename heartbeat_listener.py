@@ -3,19 +3,48 @@ import subprocess
 import os
 import time
 import threading
+import json
 from datetime import datetime
 
+# Load config from file (with defaults)
+CONFIG_FILE = "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/config.json"
+
+def load_config():
+    defaults = {
+        "heartbeat_port": 5556,
+        "discovery_port": 5557,
+        "adb_port": 5555,
+        "scrcpy_bin": "/home/henry/Apps/scrcpy/scrcpy",
+        "last_ip_file": "/home/henry/Desktop/last_ip.txt",
+        "log_file": "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/heartbeat_debug.log"
+    }
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            config = json.load(f)
+        # Merge with defaults
+        for k, v in defaults.items():
+            if k not in config:
+                config[k] = v
+        return config
+    except:
+        return defaults
+
+def save_config(config):
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config, f, indent=2)
+    except:
+        pass
+
+config = load_config()
+
 # Configuration
-HEARTBEAT_PORT = 5556  # Port the phone will send "Hello" to
-DISCOVERY_PORT = 5557  # Port PC broadcasts its presence
-SCRCPY_BIN = "/home/henry/Apps/scrcpy/scrcpy"
-LAST_IP_FILE = "/home/henry/Desktop/last_ip.txt"
-
-# Phone's ADB TCP IP (connect via USB, then enable ADB over TCP)
-PHONE_ADB_IP = "10.121.2.114"
-PHONE_ADB_PORT = 5555
-
-LOG_FILE = "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/heartbeat_debug.log"
+HEARTBEAT_PORT = config["heartbeat_port"]
+DISCOVERY_PORT = config["discovery_port"]
+ADB_PORT = config["adb_port"]
+SCRCPY_BIN = config["scrcpy_bin"]
+LAST_IP_FILE = config["last_ip_file"]
+LOG_FILE = config["log_file"]
 
 # Track if scrcpy is already running
 scrcpy_process = None
@@ -55,7 +84,7 @@ def get_adb_devices():
                     devices.append({"serial": parts[0], "status": parts[1]})
         return devices
     except Exception as e:
-        log(f"❌ Error getting ADB devices: {e}")
+        log(f"Error getting ADB devices: {e}")
         return []
 
 def is_phone_connected(phone_ip):
@@ -71,30 +100,32 @@ def start_scrcpy(phone_ip=None):
     global scrcpy_process, current_phone_ip
     
     with scrcpy_lock:
-        # Use the provided phone IP, fallback to hardcoded
-        target_ip = phone_ip or PHONE_ADB_IP
+        target_ip = phone_ip
+        if not target_ip:
+            log("ERROR: No phone IP provided")
+            return False
         current_phone_ip = target_ip
         
         # Check if scrcpy is already running
         if scrcpy_process and scrcpy_process.poll() is None:
-            log(f"ℹ️  scrcpy already running on {target_ip}, skipping launch")
+            log(f"scrcpy already running on {target_ip}, skipping launch")
             return True
         
         # Check if phone is already connected via ADB
         if not is_phone_connected(target_ip):
-            log(f"🚀 Connecting to phone at {target_ip}:{PHONE_ADB_PORT}...")
-            result = subprocess.run(["adb", "connect", f"{target_ip}:{PHONE_ADB_PORT}"], capture_output=True, text=True)
+            log(f"Connecting to phone at {target_ip}:{ADB_PORT}...")
+            result = subprocess.run(["adb", "connect", f"{target_ip}:{ADB_PORT}"], capture_output=True, text=True)
             log(f"ADB connect stdout: {result.stdout.strip()}")
             log(f"ADB connect stderr: {result.stderr.strip()}")
             
             if "connected to" not in result.stdout.lower() and "already connected" not in result.stdout.lower():
-                log(f"🥺 Failed to connect to {target_ip}. Is ADB over TCP enabled? 🎀")
+                log(f"Failed to connect to {target_ip}. Is ADB over TCP enabled?")
                 return False
         else:
-            log(f"💖 Phone already connected at {target_ip}!")
+            log(f"Phone already connected at {target_ip}")
         
-        log(f"💖 Connected! Launching scrcpy... (｡♥‿♥｡)")
-        scrcpy_process = subprocess.Popen([SCRCPY_BIN, "--audio-source=playback", "-s", f"{target_ip}:{PHONE_ADB_PORT}"])
+        log(f"Connected! Launching scrcpy...")
+        scrcpy_process = subprocess.Popen([SCRCPY_BIN, "--audio-source=playback", "-s", f"{target_ip}:{ADB_PORT}"])
         return True
 
 def monitor_scrcpy():
@@ -106,14 +137,14 @@ def monitor_scrcpy():
         with scrcpy_lock:
             if scrcpy_process and scrcpy_process.poll() is not None:
                 exit_code = scrcpy_process.poll()
-                log(f"⚠️  scrcpy exited with code {exit_code}, attempting reconnect...")
+                log(f"scrcpy exited with code {exit_code}, attempting reconnect...")
                 scrcpy_process = None
                 
                 if current_phone_ip:
-                    log(f"🔄 Reconnecting to {current_phone_ip}...")
+                    log(f"Reconnecting to {current_phone_ip}...")
                     start_scrcpy(current_phone_ip)
                 else:
-                    log("🥺 No phone IP to reconnect to, waiting for heartbeat...")
+                    log("No phone IP to reconnect to, waiting for heartbeat...")
 
 def listen_for_heartbeat():
     """Listens for UDP packets from the Android app."""
@@ -122,7 +153,8 @@ def listen_for_heartbeat():
     log("Scrcpy Ultimate Link - Heartbeat Listener Starting...")
     log(f"Local PC IP: {local_ip}")
     log(f"Heartbeat port: {HEARTBEAT_PORT}")
-    log(f"Phone ADB IP: {PHONE_ADB_IP}:{PHONE_ADB_PORT}")
+    log(f"Discovery port: {DISCOVERY_PORT}")
+    log(f"ADB port: {ADB_PORT}")
     log(f"SCRCPY_BIN: {SCRCPY_BIN}")
     log(f"ADB available: {subprocess.run(['which', 'adb'], capture_output=True).stdout.decode().strip()}")
     log("=" * 60)
@@ -131,15 +163,15 @@ def listen_for_heartbeat():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         sock.bind(("0.0.0.0", HEARTBEAT_PORT))
-        log(f"✅ Bound to 0.0.0.0:{HEARTBEAT_PORT}")
+        log(f"Bound to 0.0.0.0:{HEARTBEAT_PORT}")
     except Exception as e:
-        log(f"❌ FAILED to bind port {HEARTBEAT_PORT}: {e}")
+        log(f"FAILED to bind port {HEARTBEAT_PORT}: {e}")
         log(f"   Check if another process is using it: lsof -i :{HEARTBEAT_PORT}")
         return
     
     sock.settimeout(5.0)
-    log(f"📡 Heartbeat listener ACTIVE on port {HEARTBEAT_PORT}...")
-    log("Waiting for Henny's phone to say hello... 💖✨")
+    log(f"Heartbeat listener ACTIVE on port {HEARTBEAT_PORT}...")
+    log("Waiting for phone to say hello...")
     
     beat_count = 0
     while True:
@@ -149,26 +181,26 @@ def listen_for_heartbeat():
             message = data.decode('utf-8').strip()
             ip = addr[0]
             
-            log(f"💓 [Beat #{beat_count}] From {addr[0]}:{addr[1]} → Message: '{message}'")
+            log(f"[Beat #{beat_count}] From {addr[0]}:{addr[1]} -> Message: '{message}'")
             
             if "HELLO_HENNY" in message:
-                log(f"🎯 VALID heartbeat from {ip}!")
-                # Parse phone IP from message: "HELLO_HENNY 🎀✨|PHONE_IP"
-                phone_ip = PHONE_ADB_IP
+                log(f"VALID heartbeat from {ip}!")
+                # Parse phone IP from message: "HELLO_HENNY|PHONE_IP"
+                phone_ip = None
                 if '|' in message:
                     phone_ip = message.split('|')[-1]
-                    log(f"📱 Phone ADB IP from heartbeat: {phone_ip}")
+                    log(f"Phone ADB IP from heartbeat: {phone_ip}")
                 if start_scrcpy(phone_ip):
-                    log("✨ Success! Everything is mirrored! 🚀")
+                    log("Success! Everything is mirrored!")
                 else:
-                    log("🥺 Heartbeat was heard, but ADB connection failed. 🎀")
+                    log("Heartbeat was heard, but ADB connection failed.")
             else:
-                log(f"⚠️  Ignoring non-HELLO packet: '{message}' from {ip}")
+                log(f"Ignoring non-HELLO packet: '{message}' from {ip}")
                 
         except socket.timeout:
-            log(f"⏳ Still listening... (received {beat_count} total packets so far)")
+            log(f"Still listening... (received {beat_count} total packets so far)")
         except Exception as e:
-            log(f"❌ Socket error: {e}")
+            log(f"Socket error: {e}")
             time.sleep(1)
 
 def broadcast_discovery():
@@ -178,7 +210,7 @@ def broadcast_discovery():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     message = f"SCRCPC_HERE {local_ip} {HEARTBEAT_PORT}".encode()
     
-    log(f"📢 Starting discovery broadcast on port {DISCOVERY_PORT} (PC IP: {local_ip})")
+    log(f"Starting discovery broadcast on port {DISCOVERY_PORT} (PC IP: {local_ip})")
     
     while True:
         try:
@@ -193,7 +225,7 @@ def broadcast_discovery():
                 bcast = f"{parts[0]}.{parts[1]}.{parts[2]}.255"
                 sock.sendto(message, (bcast, DISCOVERY_PORT))
         except Exception as e:
-            log(f"⚠️  Broadcast error: {e}")
+            log(f"Broadcast error: {e}")
         time.sleep(3)
 
 if __name__ == "__main__":
@@ -213,4 +245,4 @@ if __name__ == "__main__":
     try:
         listen_for_heartbeat()
     except KeyboardInterrupt:
-        log("\nStopping listener... See you soon, Henny! 🎀💖")
+        log("\nStopping listener... See you soon!")
