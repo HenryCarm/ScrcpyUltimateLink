@@ -16,7 +16,7 @@ android.minapi = 21
 android.ndk = 25b
 
 # App icon - use scrcpy icon
-icon.filename = /home/henry/Apps/scrcpy/icon.png
+icon.filename = /home/henry/Apps/scrcpy/scrcpy.png
 
 # Size optimizations - exclude unused directories and patterns
 android.exclude_dirs = tests,__pycache__,.git,.github,docs,examples
