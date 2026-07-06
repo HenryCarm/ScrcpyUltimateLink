@@ -1,5 +1,5 @@
 [app]
-title = Scrcpy Heartbeat
+title = ScrcpyLink
 package.name = scrcpyheartbeat
 package.domain = org.henry.scrcpy
 source.dir = android
