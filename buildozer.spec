@@ -10,13 +10,13 @@ orientation = portrait
 osx.python_version = 3
 osx.kivy_version = 1.11.1
 android.archs = arm64-v8a
-android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,ACCESS_WIFI_STATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
 
-# App icon - use scrcpy icon
-icon.filename = /home/henry/Apps/scrcpy/scrcpy.png
+# App icon - use local icon in repo
+icon.filename = icon.png
 
 # Size optimizations - exclude unused directories and patterns
 android.exclude_dirs = tests,__pycache__,.git,.github,docs,examples
@@ -57,7 +57,7 @@ android.exclude_modules = \
     zipimport,zipapp,site,sysconfig,platform,posixpath,\
     glob,fnmatch,stat,filecmp,shutil,tempfile,fileinput,\
     aifc,audioop,sunau,wave,chunk,colorsys,imghdr,\
-    sndhdr,ossaudiodev,spwd,grp,pwd,crypt,termios,\
+    sndhdr,ossaudiodev,spwd,grp,pwd,crypt,termios,tty,\
     resource,select,selectors,asyncio,asyncore,asynchat,\
     socketserver,http,urllib,xml,xmlrpc,html,\
     email,mailbox,mailcap,mimetypes,ftplib,imaplib,\
