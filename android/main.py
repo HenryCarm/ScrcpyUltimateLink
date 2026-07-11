@@ -173,6 +173,18 @@ class HeartbeatApp(App):
         root.add_widget(self.status_label)
         root.add_widget(port_layout)
         
+        # Restart Button
+        restart_btn = Button(
+            text="🔄 Restart Connection",
+            background_color=(0.059, 0.204, 0.376, 1),  # #0f3460
+            color=(0.0, 0.85, 0.647, 1),  # #00d9a5
+            font_size='18sp',
+            size_hint_y=None,
+            height=60
+        )
+        restart_btn.bind(on_press=self.restart_connection)
+        root.add_widget(restart_btn)
+        
         # Start discovery_list = []
         return root
 
@@ -182,6 +194,10 @@ class HeartbeatApp(App):
 
     def on_start(self):
         print("App started")
+        # Start discovery listener
+        threading.Thread(target=self.discovery_listener, daemon=True).start()
+        # Start phone IP monitor
+        threading.Thread(target=self.phone_ip_monitor, daemon=True).start()
 
     def on_pause(self):
         print("App paused - keeping heartbeat alive")
@@ -197,6 +213,25 @@ class HeartbeatApp(App):
         self.sending = False
         if self.heartbeat_sock:
             self.heartbeat_sock.close()
+
+    def restart_connection(self, instance):
+        print("Restarting connection...")
+        self.sending = False
+        self.discovered_pc_ip = None
+        self.last_phone_ip = None
+        if self.heartbeat_sock:
+            self.heartbeat_sock.close()
+            self.heartbeat_sock = None
+        if self.heartbeat_thread and self.heartbeat_thread.is_alive():
+            self.heartbeat_thread.join(timeout=2)
+        self.pc_ip_input.text = "Discovering PC..."
+        self.status_label.text = "Listening for PC broadcast..."
+        self.label.text = "Scrcpy Heartbeat"
+        # Restart discovery listener
+        threading.Thread(target=self.discovery_listener, daemon=True).start()
+        # Restart phone IP monitor
+        threading.Thread(target=self.phone_ip_monitor, daemon=True).start()
+        print("Connection restart initiated")
 
     def discovery_listener(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
