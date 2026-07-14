@@ -64,6 +64,12 @@ class HeartbeatApp(App):
         self.last_phone_ip = None
         self.heartbeat_sock = None
         
+        # Thread control flags
+        self._discovery_running = False
+        self._ip_monitor_running = False
+        self._discovery_thread = None
+        self._ip_monitor_thread = None
+        
         # Root layout with dark background
         root = BoxLayout(orientation='vertical', padding=20, spacing=15)
         root.canvas.before.clear()
@@ -166,13 +172,6 @@ class HeartbeatApp(App):
         adb_layout.add_widget(self.adb_port_spinner)
         port_layout.add_widget(adb_layout)
         
-        # Add all widgets
-        root.add_widget(self.label)
-        root.add_widget(self.pc_ip_input)
-        root.add_widget(self.phone_ip_label)
-        root.add_widget(self.status_label)
-        root.add_widget(port_layout)
-        
         # Restart Button
         restart_btn = Button(
             text="🔄 Restart Connection",
@@ -183,9 +182,23 @@ class HeartbeatApp(App):
             height=60
         )
         restart_btn.bind(on_press=self.restart_connection)
+        
+        # Add all widgets
+        root = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        root.canvas.before.clear()
+        with root.canvas.before:
+            from kivy.graphics import Color, Rectangle
+            Color(*DARK_BG)
+            self.rect = Rectangle(size=root.size, pos=root.pos)
+        root.bind(size=self._update_rect, pos=self._update_rect)
+        
+        root.add_widget(self.label)
+        root.add_widget(self.pc_ip_input)
+        root.add_widget(self.phone_ip_label)
+        root.add_widget(self.status_label)
+        root.add_widget(port_layout)
         root.add_widget(restart_btn)
         
-        # Start discovery_list = []
         return root
 
     def _update_rect(self, instance, value):
@@ -194,10 +207,52 @@ class HeartbeatApp(App):
 
     def on_start(self):
         print("App started")
-        # Start discovery listener
-        threading.Thread(target=self.discovery_listener, daemon=True).start()
-        # Start phone IP monitor
-        threading.Thread(target=self.phone_ip_monitor, daemon=True).start()
+        self._start_services()
+
+    def _start_services(self):
+        """Start all background services with proper thread management."""
+        self._stop_services()  # Clean up any existing threads first
+        
+        self._discovery_running = True
+        self._ip_monitor_running = True
+        
+        self._discovery_thread = threading.Thread(target=self.discovery_listener, daemon=True)
+        self._discovery_thread.start()
+        
+        self._ip_monitor_thread = threading.Thread(target=self.phone_ip_monitor, daemon=True)
+        self._ip_monitor_thread.start()
+        
+        print("Services started")
+
+    def _stop_services(self):
+        """Stop all background services gracefully."""
+        self._discovery_running = False
+        self._ip_monitor_running = False
+        self.sending = False
+        
+        if self.heartbeat_sock:
+            self.heartbeat_sock.close()
+            self.heartbeat_sock = None
+            
+        if self.heartbeat_thread and self.heartbeat_thread.is_alive():
+            self.heartbeat_thread.join(timeout=2)
+            self.heartbeat_thread = None
+            
+        # Wait for background threads to finish
+        if self._discovery_thread and self._discovery_thread.is_alive():
+            self._discovery_thread.join(timeout=2)
+        if self._ip_monitor_thread and self._ip_monitor_thread.is_alive():
+            self._ip_monitor_thread.join(timeout=2)
+            
+        self._discovery_thread = None
+        self._ip_monitor_thread = None
+        self.heartbeat_thread = None
+        self.heartbeat_sock = None
+        self.sending = False
+
+    def on_start(self):
+        print("App started")
+        self._start_services()
 
     def on_pause(self):
         print("App paused - keeping heartbeat alive")
@@ -205,62 +260,69 @@ class HeartbeatApp(App):
 
     def on_resume(self):
         print("App resumed")
-        if self.sending and self.discovered_pc_ip:
-            print("App resumed - heartbeat still running")
+        # Services should already be running, but ensure they are
+        if not self._discovery_running:
+            self._start_services()
 
     def on_stop(self):
         print("App stopping - cleaning up")
-        self.sending = False
-        if self.heartbeat_sock:
-            self.heartbeat_sock.close()
+        self._stop_services()
 
     def restart_connection(self, instance):
         print("Restarting connection...")
-        self.sending = False
+        self._stop_services()
         self.discovered_pc_ip = None
         self.last_phone_ip = None
-        if self.heartbeat_sock:
-            self.heartbeat_sock.close()
-            self.heartbeat_sock = None
-        if self.heartbeat_thread and self.heartbeat_thread.is_alive():
-            self.heartbeat_thread.join(timeout=2)
         self.pc_ip_input.text = "Discovering PC..."
         self.status_label.text = "Listening for PC broadcast..."
         self.label.text = "Scrcpy Heartbeat"
-        # Restart discovery listener
-        threading.Thread(target=self.discovery_listener, daemon=True).start()
-        # Restart phone IP monitor
-        threading.Thread(target=self.phone_ip_monitor, daemon=True).start()
+        self._start_services()
         print("Connection restart initiated")
 
+    # ============================================================
+    # DISCOVERY LISTENER - Listens for PC broadcast on DISCOVERY_PORT
+    # ============================================================
     def discovery_listener(self):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("0.0.0.0", DISCOVERY_PORT))
-        
-        print(f"Listening for PC discovery on port {DISCOVERY_PORT}...")
-        
-        while True:
-            try:
-                data, addr = sock.recvfrom(1024)
-                message = data.decode('utf-8').strip()
-                print(f"Discovery packet from {addr}: {message}")
-                
-                if message.startswith("SCRCPC_HERE"):
-                    parts = message.split()
-                    if len(parts) >= 3:
-                        pc_ip = parts[1]
-                        heartbeat_port = int(parts[2])
-                        if self.discovered_pc_ip != pc_ip:
-                            self.discovered_pc_ip = pc_ip
-                            Clock.schedule_once(lambda dt: self.update_discovered_ip(pc_ip, heartbeat_port))
-                            print(f"Discovered PC at {pc_ip}:{heartbeat_port}")
-            except Exception as e:
-                print(f"Discovery error: {e}")
-                time.sleep(1)
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.settimeout(1.0)  # Allow checking _discovery_running flag
+            sock.bind(("0.0.0.0", DISCOVERY_PORT))
+            
+            print(f"Listening for PC discovery on port {DISCOVERY_PORT}...")
+            
+            while self._discovery_running:
+                try:
+                    data, addr = sock.recvfrom(1024)
+                    message = data.decode('utf-8').strip()
+                    print(f"Discovery packet from {addr}: {message}")
+                    
+                    if message.startswith("SCRCPC_HERE"):
+                        parts = message.split()
+                        if len(parts) >= 3:
+                            pc_ip = parts[1]
+                            heartbeat_port = int(parts[2])
+                            if self.discovered_pc_ip != pc_ip:
+                                self.discovered_pc_ip = pc_ip
+                                Clock.schedule_once(lambda dt: self.update_discovered_ip(pc_ip, heartbeat_port))
+                                print(f"Discovered PC at {pc_ip}:{heartbeat_port}")
+                except socket.timeout:
+                    continue  # Check _discovery_running flag
+                except Exception as e:
+                    if self._discovery_running:
+                        print(f"Discovery error: {e}")
+                        time.sleep(1)
+        except Exception as e:
+            print(f"Discovery listener failed: {e}")
+        finally:
+            if sock:
+                sock.close()
+            print("Discovery listener stopped")
 
     def phone_ip_monitor(self):
-        while True:
+        print("Phone IP monitor started")
+        while self._ip_monitor_running:
             try:
                 current_ip = self.get_phone_ip()
                 if current_ip != self.last_phone_ip:
@@ -272,7 +334,7 @@ class HeartbeatApp(App):
                     Clock.schedule_once(lambda dt: self.update_phone_ip_display(current_ip))
             except Exception as e:
                 print(f"Phone IP monitor error: {e}")
-            time.sleep(10)
+            time.sleep(10)  # Check every 10 seconds
 
     def get_phone_ip(self):
         try:
