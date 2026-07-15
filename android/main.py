@@ -403,10 +403,12 @@ class HeartbeatApp(App):
         while self.sending:
             try:
                 phone_ip = self.get_phone_ip()
-                message = f"HELLO_HENNY|{phone_ip}"
+                # Get the ACTUAL ADB port (wireless debugging port)
+                adb_port = self.get_adb_port()
+                message = f"HELLO_HENNY|{phone_ip}|{adb_port}"
                 
                 self.heartbeat_sock.sendto(message.encode('utf-8'), (target_ip, port))
-                print(f"Sent heartbeat to {target_ip}:{port} (phone IP: {phone_ip})")
+                print(f"Sent heartbeat to {target_ip}:{port} (phone IP: {phone_ip}, ADB port: {adb_port})")
                 retry_count = 0
                 
             except Exception as e:
@@ -431,6 +433,20 @@ class HeartbeatApp(App):
         if self.heartbeat_sock:
             self.heartbeat_sock.close()
         print("Heartbeat loop ended")
+    
+    def get_adb_port(self):
+        """Get the actual ADB port (wireless debugging port)"""
+        try:
+            import subprocess
+            # Try to get the ADB port from the system
+            result = subprocess.run(["sh", "-c", "getprop service.adb.tcp.port"], capture_output=True, text=True)
+            port = result.stdout.strip()
+            if port and port.isdigit():
+                return int(port)
+        except:
+            pass
+        # Fallback to default
+        return 5555
 
     def on_heartbeat_stopped(self):
         self.sending = False

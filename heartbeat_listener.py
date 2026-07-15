@@ -87,15 +87,16 @@ def get_adb_devices():
         log(f"Error getting ADB devices: {e}")
         return []
 
-def is_phone_connected(phone_ip):
-    """Check if the specific phone IP is connected via ADB."""
+def is_phone_connected(phone_ip, adb_port=ADB_PORT):
+    """Check if the specific phone IP is connected via ADB on the given port."""
     devices = get_adb_devices()
+    target = f"{phone_ip}:{adb_port}"
     for d in devices:
-        if phone_ip in d["serial"] and d["status"] == "device":
+        if target in d["serial"] and d["status"] == "device":
             return True
     return False
 
-def start_scrcpy(phone_ip=None):
+def start_scrcpy(phone_ip=None, adb_port=ADB_PORT):
     """Connects to the device and launches scrcpy."""
     global scrcpy_process, current_phone_ip
     
@@ -112,20 +113,20 @@ def start_scrcpy(phone_ip=None):
             return True
         
         # Check if phone is already connected via ADB
-        if not is_phone_connected(target_ip):
-            log(f"Connecting to phone at {target_ip}:{ADB_PORT}...")
-            result = subprocess.run(["adb", "connect", f"{target_ip}:{ADB_PORT}"], capture_output=True, text=True)
+        if not is_phone_connected(target_ip, adb_port):
+            log(f"Connecting to phone at {target_ip}:{adb_port}...")
+            result = subprocess.run(["adb", "connect", f"{target_ip}:{adb_port}"], capture_output=True, text=True)
             log(f"ADB connect stdout: {result.stdout.strip()}")
             log(f"ADB connect stderr: {result.stderr.strip()}")
             
             if "connected to" not in result.stdout.lower() and "already connected" not in result.stdout.lower():
-                log(f"Failed to connect to {target_ip}. Is ADB over TCP enabled?")
+                log(f"Failed to connect to {target_ip}:{adb_port}. Is ADB over TCP enabled?")
                 return False
         else:
-            log(f"Phone already connected at {target_ip}")
+            log(f"Phone already connected at {target_ip}:{adb_port}")
         
-        log(f"Connected! Launching scrcpy...")
-        scrcpy_process = subprocess.Popen([SCRCPY_BIN, "--audio-source=playback", "-s", f"{target_ip}:{ADB_PORT}"])
+        log(f"Connected! Launching scrcpy on port {adb_port}...")
+        scrcpy_process = subprocess.Popen([SCRCPY_BIN, "--audio-source=playback", "-s", f"{target_ip}:{adb_port}"])
         return True
 
 def monitor_scrcpy():
@@ -183,14 +184,27 @@ def listen_for_heartbeat():
             
             log(f"[Beat #{beat_count}] From {addr[0]}:{addr[1]} -> Message: '{message}'")
             
-            if "HELLO_HENNY" in message:
+if "HELLO_HENNY" in message:
                 log(f"VALID heartbeat from {ip}!")
-                # Parse phone IP from message: "HELLO_HENNY|PHONE_IP"
+                # Parse phone IP and ADB port from message: "HELLO_HENNY|PHONE_IP|ADB_PORT"
                 phone_ip = None
-                if '|' in message:
-                    phone_ip = message.split('|')[-1]
-                    log(f"Phone ADB IP from heartbeat: {phone_ip}")
-                if start_scrcpy(phone_ip):
+                adb_port = ADB_PORT  # default
+                parts = message.split('|')
+                if len(parts) >= 3:
+                    phone_ip = parts[1].strip()
+                    try:
+                        adb_port = int(parts[2].strip())
+                    except:
+                        adb_port = ADB_PORT
+                    log(f"Phone ADB IP from heartbeat: '{phone_ip}' (sender: {ip}), ADB port: {adb_port}")
+                elif '|' in message:
+                    phone_ip = message.split('|')[-1].strip()
+                    log(f"WARNING: Old format heartbeat, using default ADB port: {adb_port}")
+                else:
+                    log(f"WARNING: No phone IP in heartbeat, using sender IP: {ip}")
+                    phone_ip = ip
+                log(f"Attempting connection to PHONE IP: {phone_ip}:{adb_port}")
+                if start_scrcpy(phone_ip, adb_port):
                     log("Success! Everything is mirrored!")
                 else:
                     log("Heartbeat was heard, but ADB connection failed.")
