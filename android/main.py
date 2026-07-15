@@ -183,6 +183,17 @@ class HeartbeatApp(App):
         )
         restart_btn.bind(on_press=self.restart_connection)
         
+        # Help/Guide Button
+        help_btn = Button(
+            text="📖 Complete Setup Guide",
+            background_color=(0.2, 0.1, 0.4, 1),  # Dark purple
+            color=(0.0, 0.85, 0.647, 1),  # #00d9a5
+            font_size='16sp',
+            size_hint_y=None,
+            height=50
+        )
+        help_btn.bind(on_press=self.show_help_guide)
+        
         # Add all widgets
         root = BoxLayout(orientation='vertical', padding=20, spacing=15)
         root.canvas.before.clear()
@@ -198,6 +209,7 @@ class HeartbeatApp(App):
         root.add_widget(self.status_label)
         root.add_widget(port_layout)
         root.add_widget(restart_btn)
+        root.add_widget(help_btn)
         
         return root
 
@@ -457,3 +469,123 @@ class HeartbeatApp(App):
 
 if __name__ == "__main__":
     HeartbeatApp().run()
+
+
+# ============================================================
+# COMPLETE SETUP GUIDE - Copy this to Termux for Shizuku Setup
+# ============================================================
+"""
+===========================================================================
+                    SCRCPY ULTIMATE LINK - COMPLETE SETUP GUIDE
+===========================================================================
+
+This guide provides everything needed to set up persistent wireless ADB
+connection using Shizuku that survives phone reboots completely.
+
+===========================================================================
+1. PREREQUISITES
+===========================================================================
+• Samsung phone with Android 13/14
+• Magisk installed and rooted
+• Shizuku Magisk module installed (v13.5.2+)
+• Termux + Termux:Boot from F-Droid/Play Store
+• PC running Ubuntu/Linux with scrcpy 4.0+
+
+===========================================================================
+2. SHIZUKU SETUP (Run in Termux - ONE TIME)
+===========================================================================
+# Open Shizuku app → Start service (grant root when prompted)
+# Then in Termux run this EXACT command:
+su -c "setprop service.adb.tcp.port 5555; setprop persist.adb.tcp.port 5555; setprop service.adb.tcp.bind 0.0.0.0; stop adbd && start adbd"
+
+# Verify it works:
+su -c "netstat -tuln | grep 5555"
+# Should show: 0.0.0.0:5555 or :::5555
+
+===========================================================================
+3. TERMUX:BOOT SCRIPT (Auto-start on boot)
+===========================================================================
+# Create the boot script:
+mkdir -p ~/.termux/boot
+cat > ~/.termux/boot/99-adb-wifi.sh << 'EOF'
+#!/data/data/com.termux/files/usr/bin/bash
+
+# Keep Termux awake so One UI doesn't freeze it
+termux-wake-lock
+
+# Wait 10 seconds for system & Magisk/Shizuku to fully boot
+sleep 10
+
+# Force ADB to listen on 0.0.0.0:5555 (All Interfaces including Hotspot!)
+su -c "setprop service.adb.tcp.port 5555"
+su -c "setprop persist.adb.tcp.port 5555"
+su -c "setprop service.adb.tcp.bind 0.0.0.0"
+su -c "stop adbd && start adbd"
+
+# Gentle keep-alive loop that won't spam your CPU or cycle IPs
+while true; do
+    PORT=$(su -c "getprop service.adb.tcp.port")
+    if [ "$PORT" != "5555" ]; then
+        su -c "setprop service.adb.tcp.port 5555; setprop persist.adb.tcp.port 5555; stop adbd && start adbd"
+    fi
+    sleep 60
+done &
+
+EOF
+
+# Make it executable:
+chmod +x ~/.termux/boot/99-adb-wifi.sh
+
+===========================================================================
+4. BATTERY OPTIMIZATION WHITELISTING (Critical!)
+===========================================================================
+su -c "cmd appops set com.termux RUN_IN_BACKGROUND allow"
+su -c "cmd appops set com.termux RUN_ANY_IN_BACKGROUND allow"
+su -c "cmd appops set moe.shizuku.privileged.api RUN_IN_BACKGROUND allow"
+su -c "cmd appops set moe.shizuku.privileged.api RUN_ANY_IN_BACKGROUND allow"
+su -c "dumpsys deviceidle whitelist +com.termux"
+su -c "dumpsys deviceidle whitelist +moe.shizuku.privileged.api"
+su -c "dumpsys deviceidle whitelist +com.genymobile.scrcpy"
+
+===========================================================================
+5. ANDROID 11+ WIRELESS DEBUGGING PAIRING (If needed)
+===========================================================================
+# On phone: Developer Options → Wireless Debugging → "Pair device with pairing code"
+# In Termux:
+su -c "adb pair <IP:PORT> <6-digit-code>"
+# Then connect:
+su -c "adb connect <IP:PORT>"
+# Then from PC: adb connect <phone-ip>:5555
+
+===========================================================================
+5. VERIFICATION COMMANDS
+===========================================================================
+# Check ADB is listening on all interfaces:
+su -c "netstat -tuln | grep 5555"
+# Should show: 0.0.0.0:5555  or  :::5555
+
+# From PC:
+adb connect <phone-actual-ip>:5555
+# e.g., adb connect 10.18.209.82:5555
+
+# Then launch scrcpy:
+scrcpy --audio-source=playback -s <phone-ip>:5555
+
+===========================================================================
+6. TROUBLESHOOTING
+===========================================================================
+• Phone not found? → Same network + WiFi hotspot enabled
+• ADB connection refused? → Run Shizuku ADB command on phone
+• IP cycling? → Tap 'Restart Connection' on phone app
+• Black screen? → Tap 'Restart Connection' on phone app
+• ADB over WiFi stops after reboot? → Check Termux:Boot script runs
+
+===========================================================================
+7. USEFUL LINKS
+===========================================================================
+• GitHub: https://github.com/HenryCarm/ScrcpyUltimateLink
+• Shizuku: https://shizuku.rikka.app/
+• Termux:Boot: https://f-droid.org/packages/com.termux.boot/
+• Magisk: https://github.com/topjohnwu/Magisk
+===========================================================================
+"""
