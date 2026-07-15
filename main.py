@@ -246,6 +246,125 @@ class ScrcpyUltimateLink(QMainWindow):
         layout.addWidget(self.status_label)
         layout.addWidget(self.log_area)
 
+        # Help/Guide Section
+        self.help_area = QScrollArea()
+        self.help_area.setWidgetResizable(True)
+        self.help_area.setFixedHeight(300)
+        self.help_area.setStyleSheet("""
+            QScrollArea {
+                background-color: #16213e;
+                border: 1px solid #0f3460;
+                border-radius: 8px;
+            }
+            QScrollBar:vertical {
+                background-color: #1a1a2e;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #00d9a5;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+        """)
+        
+        help_widget = QWidget()
+        help_layout = QVBoxLayout(help_widget)
+        help_layout.setSpacing(15)
+        help_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Help Title
+        help_title = QLabel("📖 Complete Setup Guide")
+        help_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #00d9a5;")
+        help_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        help_layout.addWidget(help_title)
+        
+        # Guide Content
+        guide_text = QLabel()
+        guide_text.setWordWrap(True)
+        guide_text.setStyleSheet("color: #e0e0e0; font-size: 13px; line-height: 1.6;")
+        guide_text.setText(
+            "<b>🚀 Quick Start:</b><br/>"
+            "1. Make sure your phone and PC are on the same network (or phone hotspot)<br/>"
+            "2. Open this app on PC, then open 'Scrcpy Heartbeat' on your phone<br/>"
+            "3. Tap '🔄 Restart Connection' on phone if needed<br/>"
+            "4. scrcpy will launch automatically!<br/><br/>"
+            
+            "<b>📱 Android App Install:</b><br/>"
+            "• Download APK from GitHub Actions artifacts<br/>"
+            "• Install on phone (allow unknown sources)<br/>"
+            "• Grant all permissions when prompted<br/><br/>"
+            
+            "<b>⚡ Shizuku Setup (Persistent ADB over WiFi):</b><br/>"
+            "1. Install <b>Magisk</b> → Install <b>Shizuku</b> module in Magisk app → Reboot<br/>"
+            "2. Open <b>Shizuku</b> app → Start service (grant root when prompted)<br/>"
+            "3. Install <b>Termux</b> + <b>Termux:Boot</b> from F-Droid/Play Store<br/>"
+            "4. In Termux, run these exact commands:<br/>"
+            "<code style='color:#00d9a5;'>su -c \"setprop service.adb.tcp.port 5555; setprop persist.adb.tcp.port 5555; "
+            "setprop service.adb.tcp.bind 0.0.0.0; stop adbd && start adbd\"</code><br/>"
+            "5. Create Termux:Boot script: <code style='color:#00d9a5;'>~/.termux/boot/99-adb-wifi.sh</code><br/>"
+            "   (See GitHub wiki for full script - makes ADB persistent across reboots)<br/>"
+            "6. Whitelist from battery optimization:<br/>"
+            "<code style='color:#00d9a5;'>su -c \"cmd appops set com.termux RUN_IN_BACKGROUND allow\"</code><br/>"
+            "<code style='color:#00d9a5;'>su -c \"dumpsys deviceidle whitelist +com.termux\"</code><br/><br/>"
+            
+            "<b>🔧 Port Configuration:</b><br/>"
+            "• Heartbeat Port (default 5556): Phone→PC discovery<br/>"
+            "• Discovery Port (default 5557): PC broadcast<br/>"
+            "• ADB Port (default 5555): scrcpy connection<br/>"
+            "Change if ports conflict, then click '🔄 Restart Server'<br/><br/>"
+            
+            "<b>🔁 Restart Buttons:</b><br/>"
+            "• PC: '🔄 Restart Server' - restarts discovery & heartbeat listeners<br/>"
+            "• Phone: '🔄 Restart Connection' - full reconnection reset<br/><br/>"
+            
+            "<b>🔍 Troubleshooting:</b><br/>"
+            "• Phone not found? Check both devices on same network<br/>"
+            "• ADB connection refused? Run Shizuku ADB command on phone<br/>"
+            "• IP cycling? Restart both apps using restart buttons<br/>"
+            "• Black screen on phone? Tap 'Restart Connection' on phone app<br/><br/>"
+            
+            "<b>📱 Shizuku Persistent Setup (Auto on Boot):</b><br/>"
+            "1. Install Termux + Termux:Boot from F-Droid<br/>"
+            "2. Create <code>~/.termux/boot/99-adb-wifi.sh</code> with the script from GitHub wiki<br/>"
+            "3. <code>chmod +x ~/.termux/boot/99-adb-wifi.sh</code><br/>"
+            "4. Run whitelist commands (see GitHub wiki)<br/>"
+            "5. Reboot phone - ADB over WiFi starts automatically!<br/><br/>"
+            
+            "<b>🔗 Links:</b><br/>"
+            "• GitHub: <a href='https://github.com/HenryCarm/ScrcpyUltimateLink' style='color:#00d9a5;'>github.com/HenryCarm/ScrcpyUltimateLink</a><br/>"
+            "• Shizuku: <a href='https://shizuku.rikka.app/' style='color:#00d9a5;'>shizuku.rikka.app</a><br/>"
+            "• Termux:Boot: <a href='https://f-droid.org/packages/com.termux.boot/' style='color:#00d9a5;'>F-Droid</a>"
+        )
+        help_layout.addWidget(help_title)
+        help_layout.addWidget(guide_text)
+        
+        self.help_area.setWidget(help_widget)
+        layout.addWidget(self.help_area)
+        
+        # Restart Server Button
+        self.restart_btn = QPushButton("🔄 Restart Server")
+        self.restart_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0f3460;
+                color: #00d9a5;
+                border: 2px solid #00d9a5;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #00d9a5;
+                color: #1a1a2e;
+            }
+            QPushButton:pressed {
+                background-color: #00b890;
+            }
+        """)
+        self.restart_btn.clicked.connect(self.restart_services)
+        layout.addWidget(self.restart_btn)
+
         # Initialize threads
         self.discovery = None
         self.worker = None
