@@ -6,7 +6,7 @@ import time
 import json
 import os
 from datetime import datetime
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow, QSpinBox, QHBoxLayout, QScrollArea
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow, QSpinBox, QHBoxLayout, QScrollArea, QPushButton
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QIcon
 from heartbeat_listener import start_scrcpy, get_local_ip, LOG_FILE
@@ -119,7 +119,7 @@ class HeartbeatWorker(QObject):
                     ip = addr[0]
                     message = data.decode('utf-8').strip()
                     gui_log(f"GUI got packet from {ip}:{addr[1]} -> '{message}'")
-                    if "HELLO_HENNY" in message:
+                    if "HELLO_" in message:
                         gui_log(f"VALID heartbeat from {ip}")
                         self.heartbeat_received.emit(ip)
                     else:

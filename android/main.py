@@ -11,16 +11,63 @@ from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
 
-# 1. Request Scoped Storage & Network Permissions to prevent 7-second Security Crash
+# 1. Request Scoped Storage & Network Permissions
 try:
     from android.permissions import request_permissions, Permission
-    request_permissions([Permission.INTERNET, Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
-except Exception:
-    pass
+    from android import api_version
+    from android.activity import PythonActivity
+    from jnius import autoclass
+    
+    # Request basic permissions
+    perms = [Permission.INTERNET, Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
+    request_permissions(perms)
+    
+    # On Android 11+ (API 30+), request MANAGE_EXTERNAL_STORAGE via system settings
+    if api_version >= 30:
+        try:
+            Intent = autoclass('android.content.Intent')
+            Settings = autoclass('android.provider.Settings')
+            Uri = autoclass('android.net.Uri')
+            intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+            intent.setData(Uri.parse("package:" + PythonActivity.mActivity.getPackageName()))
+            PythonActivity.mActivity.startActivity(intent)
+        except Exception as e:
+            print(f"MANAGE_EXTERNAL_STORAGE request failed: {e}")
+except Exception as e:
+    print(f"Permission request failed: {e}")
 
-# 2. Dynamic Config & Logging Paths
-CONFIG_FILE = "/sdcard/scrcpy_heartbeat_config.json"
-LOG_DIR = "/sdcard/log"
+# 2. Dynamic Config & Logging Paths - fallback to internal storage if external not available
+def get_storage_dirs():
+    """Get available storage directories, preferring external but falling back to internal"""
+    internal_dir = os.path.join(os.path.expanduser("~"), "scrcpy_link")
+    external_config = "/sdcard/scrcpy_heartbeat_config.json"
+    external_log_dir = "/sdcard/log"
+    
+    # Check if we can write to external storage
+    can_write_external = False
+    try:
+        if os.path.exists("/sdcard"):
+            test_file = "/sdcard/.scrcpy_test"
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+            can_write_external = True
+    except:
+        pass
+    
+    if can_write_external:
+        config_file = external_config
+        log_dir = external_log_dir
+    else:
+        # Use internal storage
+        os.makedirs(internal_dir, exist_ok=True)
+        config_file = os.path.join(internal_dir, "scrcpy_heartbeat_config.json")
+        log_dir = os.path.join(internal_dir, "log")
+        os.makedirs(log_dir, exist_ok=True)
+    
+    return config_file, log_dir, can_write_external
+
+CONFIG_FILE, LOG_DIR, CAN_WRITE_EXTERNAL = get_storage_dirs()
 LOG_FILE = os.path.join(LOG_DIR, "ScrcpyLink.log")
 
 def load_config():
