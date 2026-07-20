@@ -11,8 +11,10 @@ import platform
 project_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(project_dir)
 
+# Use venv Python for Nuitka
+venv_python = "/home/henry/Documents/Projects/Python/venv/bin/python"
 build_cmd = (
-    "python3 -m nuitka --standalone --onefile --enable-plugin=pyqt6 "
+    f"{venv_python} -m nuitka --standalone --onefile --enable-plugin=pyqt6 "
     "--windows-icon-from-ico=scrcpy.ico --linux-icon=icon.png main.py"
 )
 

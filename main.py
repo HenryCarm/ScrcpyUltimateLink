@@ -6,7 +6,7 @@ import time
 import json
 import os
 from datetime import datetime
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow, QSpinBox, QHBoxLayout
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow, QSpinBox, QHBoxLayout, QScrollArea
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QIcon
 from heartbeat_listener import start_scrcpy, get_local_ip, LOG_FILE

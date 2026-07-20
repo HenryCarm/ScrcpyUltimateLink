@@ -5,6 +5,9 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
 from kivy.uix.switch import Switch
+from kivy.uix.spinner import Spinner
+from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.widget import Widget
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
 
@@ -17,7 +20,7 @@ except Exception:
 
 # 2. Dynamic Config & Logging Paths
 CONFIG_FILE = "/sdcard/scrcpy_heartbeat_config.json"
-LOG_DIR = "/sdcard/Logs"
+LOG_DIR = "/sdcard/log"
 LOG_FILE = os.path.join(LOG_DIR, "ScrcpyLink.log")
 
 def load_config():
@@ -90,54 +93,61 @@ def enable_shizuku_wireless_adb():
     except Exception as e:
         app_log(f"Shizuku rish failed: {e}")
 
-class HeartbeatApp(App):
-    def build(self):
-        self.title = "Scrcpy Heartbeat"
+# --- SCREENS ---
+
+DARK_BG = (0.1, 0.1, 0.18, 1)
+PANEL_BG = (0.086, 0.13, 0.243, 1)
+ACCENT = (0.0, 0.85, 0.647, 1)
+TEXT = (0.878, 0.878, 0.878, 1)
+
+class ColoredBoxLayout(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            Color(*DARK_BG)
+            self.rect = Rectangle(size=self.size, pos=self.pos)
+        self.bind(size=self._update_rect, pos=self._update_rect)
+    
+    def _update_rect(self, instance, value):
+        self.rect.pos = instance.pos
+        self.rect.size = instance.size
+
+class MainScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = ColoredBoxLayout(orientation='vertical', padding=20, spacing=15)
+        
+        self.label = Label(text="Scrcpy Heartbeat", font_size='28sp', bold=True, color=ACCENT, size_hint_y=None, height=60)
+        self.pc_ip_input = TextInput(text="Discovering PC...", readonly=True, halign='center', font_size='20sp', background_color=PANEL_BG, foreground_color=TEXT, size_hint_y=None, height=60)
+        self.status_label = Label(text="Listening for PC broadcast...", font_size='16sp', color=(0.6, 0.6, 0.6, 1), size_hint_y=None, height=40)
+        
+        btn_layout = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None, height=130)
+        restart_btn = Button(text="🔄 Restart Connection", background_color=(0.059, 0.204, 0.376, 1), color=ACCENT, font_size='18sp')
+        restart_btn.bind(on_press=self.restart_connection)
+        
+        settings_btn = Button(text="⚙️ Settings", background_color=(0.2, 0.1, 0.4, 1), color=ACCENT, font_size='18sp')
+        settings_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'settings'))
+        
+        btn_layout.add_widget(restart_btn)
+        btn_layout.add_widget(settings_btn)
+        
+        layout.add_widget(self.label)
+        layout.add_widget(self.pc_ip_input)
+        layout.add_widget(self.status_label)
+        layout.add_widget(Widget()) # Spacer
+        layout.add_widget(btn_layout)
+        
+        self.add_widget(layout)
+        
         self.sending = False
         self.discovered_pc_ip = None
         self._discovery_running = False
-        
-        # Dark Theme
-        DARK_BG = (0.1, 0.1, 0.18, 1)
-        ACCENT = (0.0, 0.85, 0.647, 1)
-        TEXT = (0.878, 0.878, 0.878, 1)
-        
-        root = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        with root.canvas.before:
-            Color(*DARK_BG)
-            self.rect = Rectangle(size=(10000, 10000), pos=(0,0)) # Massive rect prevents layout crashes
-            
-        self.label = Label(text="Scrcpy Heartbeat", font_size='24sp', color=ACCENT, size_hint_y=None, height=50)
-        self.pc_ip_input = TextInput(text="Discovering PC...", readonly=True, halign='center', font_size='20sp', size_hint_y=None, height=50)
-        self.status_label = Label(text="Listening for PC broadcast...", font_size='16sp', color=(0.6, 0.6, 0.6, 1), size_hint_y=None, height=30)
-        
-        # Logging Toggle UI
-        log_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
-        log_layout.add_widget(Label(text="Enable Logging (/sdcard/Logs)", color=TEXT))
-        self.log_switch = Switch(active=config.get("logging_enabled", True))
-        self.log_switch.bind(active=self.on_log_switch)
-        log_layout.add_widget(self.log_switch)
-        
-        restart_btn = Button(text="🔄 Restart Connection", background_color=(0.059, 0.204, 0.376, 1), color=ACCENT, font_size='18sp', size_hint_y=None, height=60)
-        restart_btn.bind(on_press=self.restart_connection)
-        
-        root.add_widget(self.label)
-        root.add_widget(self.pc_ip_input)
-        root.add_widget(self.status_label)
-        root.add_widget(log_layout)
-        root.add_widget(restart_btn)
-        
-        return root
 
-    def on_log_switch(self, instance, value):
-        config["logging_enabled"] = value
-        save_config(config)
-        app_log(f"Logging toggled to {value}")
-
-    def on_start(self):
-        app_log("App started - Launching background workers")
-        threading.Thread(target=enable_shizuku_wireless_adb, daemon=True).start()
-        self._start_services()
+    def on_enter(self):
+        if not self._discovery_running:
+            app_log("Main screen entered - Launching background workers")
+            threading.Thread(target=enable_shizuku_wireless_adb, daemon=True).start()
+            self._start_services()
 
     def restart_connection(self, instance):
         app_log("Restarting connection manually...")
@@ -176,7 +186,6 @@ class HeartbeatApp(App):
                 except socket.timeout:
                     pass
                 except Exception as e:
-                    app_log(f"Discovery recv error: {e}")
                     time.sleep(1)
         except Exception as e:
             app_log(f"Discovery bind error: {e}")
@@ -207,9 +216,69 @@ class HeartbeatApp(App):
             time.sleep(5)
         sock.close()
 
+class SettingsScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = ColoredBoxLayout(orientation='vertical', padding=20, spacing=15)
+        
+        title = Label(text="⚙️ Settings", font_size='24sp', bold=True, color=ACCENT, size_hint_y=None, height=50)
+        layout.add_widget(title)
+        
+        # Log Info
+        log_info = Label(text=f"Logs saved to:\n{LOG_DIR}", font_size='14sp', color=TEXT, halign='center', size_hint_y=None, height=50)
+        layout.add_widget(log_info)
+        
+        # Logging Toggle
+        log_layout = BoxLayout(orientation='horizontal', size_hint_y=None, height=50)
+        log_layout.add_widget(Label(text="Enable Logging", color=TEXT, font_size='16sp'))
+        self.log_switch = Switch(active=config.get("logging_enabled", True))
+        self.log_switch.bind(active=self.on_log_switch)
+        log_layout.add_widget(self.log_switch)
+        layout.add_widget(log_layout)
+        
+        # Ports
+        self.add_port_spinner(layout, "ADB Port", "adb_port")
+        self.add_port_spinner(layout, "Heartbeat Port", "heartbeat_port")
+        self.add_port_spinner(layout, "Discovery Port", "discovery_port")
+        
+        layout.add_widget(Widget()) # Spacer
+        
+        back_btn = Button(text="🔙 Back", background_color=(0.2, 0.1, 0.4, 1), color=ACCENT, font_size='18sp', size_hint_y=None, height=60)
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'main'))
+        layout.add_widget(back_btn)
+        
+        self.add_widget(layout)
+
+    def add_port_spinner(self, layout, label_text, config_key):
+        box = BoxLayout(orientation='horizontal', size_hint_y=None, height=50)
+        box.add_widget(Label(text=label_text, color=TEXT, font_size='16sp'))
+        spinner = Spinner(text=str(config.get(config_key)), values=[str(p) for p in range(5550, 5560)], background_color=PANEL_BG, color=TEXT)
+        spinner.bind(text=lambda instance, text: self.on_port_change(config_key, text))
+        box.add_widget(spinner)
+        layout.add_widget(box)
+
+    def on_log_switch(self, instance, value):
+        config["logging_enabled"] = value
+        save_config(config)
+        app_log(f"Logging toggled to {value}")
+
+    def on_port_change(self, key, value):
+        try:
+            config[key] = int(value)
+            save_config(config)
+            app_log(f"{key} changed to {value}")
+        except:
+            pass
+
+class HeartbeatApp(App):
+    def build(self):
+        sm = ScreenManager()
+        sm.add_widget(MainScreen(name='main'))
+        sm.add_widget(SettingsScreen(name='settings'))
+        return sm
+
 if __name__ == "__main__":
     try:
         HeartbeatApp().run()
     except Exception as e:
-        # Fallback print if logger dies
         print(f"FATAL APP CRASH: {traceback.format_exc()}")
