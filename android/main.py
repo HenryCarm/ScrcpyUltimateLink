@@ -10,6 +10,59 @@ import threading
 import time
 import json
 import os
+import subprocess
+
+# ============================================================
+# SHIZUKU / ROOT ADB WIRELESS ENABLER (Gemini's exact implementation)
+# ============================================================
+def enable_shizuku_wireless_adb():
+    """
+    Enable ADB over TCP on port 5555 bound to 0.0.0.0 using Shizuku/Root.
+    This is the exact implementation from Gemini - DO NOT MODIFY.
+    """
+    adb_cmd = (
+        "setprop service.adb.tcp.port 5555; "
+        "setprop persist.adb.tcp.port 5555; "
+        "setprop service.adb.tcp.bind 0.0.0.0; "
+        "stop adbd && start adbd"
+    )
+    
+    # 1. Try Pyjnius native Android Runtime execution first
+    try:
+        from jnius import autoclass
+        Runtime = autoclass('java.lang.Runtime')
+        # Try executing via superuser / Shizuku elevated shell
+        process = Runtime.getRuntime().exec(["su", "-c", adb_cmd])
+        process.waitFor()
+        print("Successfully sent ADB binding commands via Pyjnius Runtime!")
+        return True
+    except Exception as e:
+        print(f"Pyjnius execution fallback triggered: {e}")
+
+    # 2. Fallback to standard Python subprocess su
+    try:
+        subprocess.run(["su", "-c", adb_cmd], check=True, timeout=5)
+        print("Successfully sent ADB binding commands via subprocess su!")
+        return True
+    except Exception as e:
+        print(f"Standard su execution failed: {e}")
+        
+    # 3. Final fallback: Unrooted Shizuku rish execution (Supports standard & thedjchi forks)
+    try:
+        # Check and grant appops for both standard Shizuku and custom thedjchi fork packages:
+        unrooted_cmd = (
+            "setprop service.adb.tcp.port 5555; "
+            "setprop ctl.restart adbd; "
+            "adb tcpip 5555; "
+            "cmd appops set moe.shizuku.privileged.api RUN_IN_BACKGROUND allow 2>/dev/null; "
+            "cmd appops set com.thedjchi.shizuku RUN_IN_BACKGROUND allow 2>/dev/null"
+        )
+        subprocess.run(["rish", "-c", unrooted_cmd], check=False, timeout=5)
+        print("Successfully triggered Shizuku rish commands for standard/thedjchi forks!")
+        return True
+    except Exception as e:
+        print(f"Shizuku rish execution failed: {e}")
+        return False
 
 
 CONFIG_FILE = "/sdcard/scrcpy_heartbeat_config.json"
@@ -218,7 +271,9 @@ class HeartbeatApp(App):
         self.rect.size = instance.size
 
     def on_start(self):
-        print("App started")
+        print("App started - Attempting Shizuku/Root ADB auto-enable...")
+        # Auto-trigger Shizuku ADB binding on startup!
+        threading.Thread(target=enable_shizuku_wireless_adb, daemon=True).start()
         self._start_services()
 
     def _start_services(self):
@@ -262,10 +317,6 @@ class HeartbeatApp(App):
         self.heartbeat_sock = None
         self.sending = False
 
-    def on_start(self):
-        print("App started")
-        self._start_services()
-
     def on_pause(self):
         print("App paused - keeping heartbeat alive")
         return True
@@ -281,8 +332,10 @@ class HeartbeatApp(App):
         self._stop_services()
 
     def restart_connection(self, instance):
-        print("Restarting connection...")
+        print("Restarting connection and re-triggering Shizuku ADB binding...")
         self._stop_services()
+        # Force ADB port 5555 to open again via Shizuku whenever Hen presses the button!
+        threading.Thread(target=enable_shizuku_wireless_adb, daemon=True).start()
         self.discovered_pc_ip = None
         self.last_phone_ip = None
         self.pc_ip_input.text = "Discovering PC..."

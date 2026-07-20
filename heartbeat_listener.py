@@ -4,19 +4,21 @@ import os
 import time
 import threading
 import json
+import shutil
 from datetime import datetime
 
 # Load config from file (with defaults)
-CONFIG_FILE = "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 def load_config():
+    home_dir = os.path.expanduser("~")
     defaults = {
         "heartbeat_port": 5556,
         "discovery_port": 5557,
         "adb_port": 5555,
-        "scrcpy_bin": "/home/henry/Apps/scrcpy/scrcpy",
-        "last_ip_file": "/home/henry/Desktop/last_ip.txt",
-        "log_file": "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/heartbeat_debug.log"
+        "scrcpy_bin": "scrcpy",  # Let the system PATH find scrcpy natively on Win/Mac/Linux
+        "last_ip_file": os.path.join(home_dir, "Desktop", "last_ip.txt"),
+        "log_file": os.path.join(home_dir, "ScrcpyUltimateLink_debug.log")
     }
     try:
         with open(CONFIG_FILE, "r") as f:
@@ -97,7 +99,7 @@ def is_phone_connected(phone_ip, adb_port=ADB_PORT):
     return False
 
 def start_scrcpy(phone_ip=None, adb_port=ADB_PORT):
-    """Connects to the device and launches scrcpy."""
+    """Connects to the device, saves IP to desktop, and launches scrcpy."""
     global scrcpy_process, current_phone_ip
     
     with scrcpy_lock:
@@ -106,6 +108,14 @@ def start_scrcpy(phone_ip=None, adb_port=ADB_PORT):
             log("ERROR: No phone IP provided")
             return False
         current_phone_ip = target_ip
+        
+        # Save IP to desktop file immediately so Hen's .sh scripts work automatically!
+        try:
+            with open(LAST_IP_FILE, "w") as f:
+                f.write(str(target_ip))
+            log(f"Saved active phone IP {target_ip} straight to {LAST_IP_FILE}!")
+        except Exception as e:
+            log(f"Could not save IP to {LAST_IP_FILE}: {e}")
         
         # Check if scrcpy is already running
         if scrcpy_process and scrcpy_process.poll() is None:
@@ -157,7 +167,11 @@ def listen_for_heartbeat():
     log(f"Discovery port: {DISCOVERY_PORT}")
     log(f"ADB port: {ADB_PORT}")
     log(f"SCRCPY_BIN: {SCRCPY_BIN}")
-    log(f"ADB available: {subprocess.run(['which', 'adb'], capture_output=True).stdout.decode().strip()}")
+    
+    # Check ADB availability cleanly on Windows, Mac, and Linux:
+    adb_path = shutil.which('adb') or "Not found in PATH"
+    log(f"ADB available at: {adb_path}")
+    
     log("=" * 60)
     
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -184,9 +198,9 @@ def listen_for_heartbeat():
             
             log(f"[Beat #{beat_count}] From {addr[0]}:{addr[1]} -> Message: '{message}'")
             
-if "HELLO_HENNY" in message:
+            if "HELLO_" in message or "SCRCPY_LINK" in message:
                 log(f"VALID heartbeat from {ip}!")
-                # Parse phone IP and ADB port from message: "HELLO_HENNY|PHONE_IP|ADB_PORT"
+                # Parse phone IP and ADB port from message: "HELLO_<HOSTNAME>|PHONE_IP|ADB_PORT"
                 phone_ip = None
                 adb_port = ADB_PORT  # default
                 parts = message.split('|')
@@ -203,6 +217,16 @@ if "HELLO_HENNY" in message:
                 else:
                     log(f"WARNING: No phone IP in heartbeat, using sender IP: {ip}")
                     phone_ip = ip
+                
+                # Automatically save connected IP to Desktop for Win/Mac/Linux scripts:
+                try:
+                    desktop_file = os.path.join(os.path.expanduser("~"), "Desktop", "phone_ip.txt")
+                    with open(desktop_file, "w") as f:
+                        f.write(f"{phone_ip}:{adb_port}")
+                    log(f"Saved phone IP to {desktop_file}")
+                except Exception as e:
+                    log(f"Could not save phone IP to desktop: {e}")
+                
                 log(f"Attempting connection to PHONE IP: {phone_ip}:{adb_port}")
                 if start_scrcpy(phone_ip, adb_port):
                     log("Success! Everything is mirrored!")

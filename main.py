@@ -4,6 +4,7 @@ import threading
 import socket
 import time
 import json
+import os
 from datetime import datetime
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QTextEdit, QMainWindow, QSpinBox, QHBoxLayout
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
@@ -11,19 +12,20 @@ from PyQt6.QtGui import QIcon
 from heartbeat_listener import start_scrcpy, get_local_ip, LOG_FILE
 
 APP_VERSION = "4.26.7"
-CONFIG_FILE = "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
 
 def load_config():
+    home_dir = os.path.expanduser("~")
     defaults = {
         "heartbeat_port": 5556,
         "discovery_port": 5557,
         "adb_port": 5555,
-        "scrcpy_bin": "/home/henry/Apps/scrcpy/scrcpy",
-        "last_ip_file": "/home/henry/Desktop/last_ip.txt",
-        "log_file": "/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/heartbeat_debug.log"
+        "scrcpy_bin": "scrcpy",  # Let the system PATH find scrcpy natively on Win/Mac/Linux
+        "last_ip_file": os.path.join(home_dir, "Desktop", "last_ip.txt"),
+        "log_file": os.path.join(home_dir, "ScrcpyUltimateLink_debug.log")
     }
     try:
-        with open("/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/config.json", "r") as f:
+        with open(CONFIG_FILE, "r") as f:
             config = json.load(f)
         for k, v in defaults.items():
             if k not in config:
@@ -34,7 +36,7 @@ def load_config():
 
 def save_config(config):
     try:
-        with open("/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/config.json", "w") as f:
+        with open(CONFIG_FILE, "w") as f:
             json.dump(config, f, indent=2)
     except:
         pass
@@ -136,7 +138,8 @@ class ScrcpyUltimateLink(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"Scrcpy Ultimate Link v{APP_VERSION}")
         self.setFixedSize(500, 650)
-        self.setWindowIcon(QIcon("/home/henry/Apps/scrcpy/scrcpy.png"))
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "android", "icon.png")
+        self.setWindowIcon(QIcon(icon_path))
         
         # Dark green theme (match scrcpy)
         self.setStyleSheet("""
@@ -432,7 +435,8 @@ class ScrcpyUltimateLink(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon("/home/henry/Apps/scrcpy/scrcpy.png"))
+    icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "android", "icon.png")
+    app.setWindowIcon(QIcon(icon_path))
     window = ScrcpyUltimateLink()
     window.show()
     sys.exit(app.exec())
