@@ -168,21 +168,27 @@ class MainScreen(Screen):
         self.pc_ip_input = TextInput(text="Discovering PC...", readonly=True, halign='center', font_size='20sp', background_color=PANEL_BG, foreground_color=TEXT, size_hint_y=None, height=60)
         self.status_label = Label(text="Listening for PC broadcast...", font_size='16sp', color=(0.6, 0.6, 0.6, 1), size_hint_y=None, height=40)
         
-        btn_layout = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None, height=130)
+        # Removed the spacer widget here so the buttons float higher up!
+        btn_layout = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None, height=200)
+        
         restart_btn = Button(text="🔄 Restart Connection", background_color=(0.059, 0.204, 0.376, 1), color=ACCENT, font_size='18sp')
         restart_btn.bind(on_press=self.restart_connection)
         
         settings_btn = Button(text="⚙️ Settings", background_color=(0.2, 0.1, 0.4, 1), color=ACCENT, font_size='18sp')
         settings_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'settings'))
+
+        help_btn = Button(text="📖 Help Guide", background_color=(0.1, 0.4, 0.2, 1), color=ACCENT, font_size='18sp')
+        help_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'help'))
         
         btn_layout.add_widget(restart_btn)
         btn_layout.add_widget(settings_btn)
+        btn_layout.add_widget(help_btn)
         
         layout.add_widget(self.label)
         layout.add_widget(self.pc_ip_input)
         layout.add_widget(self.status_label)
-        layout.add_widget(Widget()) # Spacer
         layout.add_widget(btn_layout)
+        layout.add_widget(Widget()) # Pushed the spacer below the buttons!
         
         self.add_widget(layout)
         
@@ -317,11 +323,102 @@ class SettingsScreen(Screen):
         except:
             pass
 
+class HelpScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = ColoredBoxLayout(orientation='vertical', padding=20, spacing=15)
+        
+        title = Label(text="📖 Help Guide", font_size='24sp', bold=True, color=ACCENT, size_hint_y=None, height=50)
+        layout.add_widget(title)
+        
+        # Guide content in a scroll view
+        from kivy.uix.scrollview import ScrollView
+        scroll = ScrollView()
+        content = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None)
+        content.bind(minimum_height=content.setter('height'))
+        
+        guide_text = (
+            "<b>🚀 Quick Start:</b><br/>"
+            "1. Make sure your phone and PC are on the same network (or phone hotspot)<br/>"
+            "2. Open this app on PC, then open 'Scrcpy Heartbeat' on your phone<br/>"
+            "3. Tap '🔄 Restart Connection' on phone if needed<br/>"
+            "4. scrcpy will launch automatically!<br/><br/>"
+            
+            "<b>📱 Android App Install:</b><br/>"
+            "• Download APK from GitHub Actions artifacts<br/>"
+            "• Install on phone (allow unknown sources)<br/>"
+            "• Grant all permissions when prompted<br/><br/>"
+            
+            "<b>⚡ Shizuku Setup (Persistent ADB over WiFi):</b><br/>"
+            "1. Install <b>Magisk</b> → Install <b>Shizuku</b> module in Magisk app → Reboot<br/>"
+            "2. Open <b>Shizuku</b> app → Start service (grant root when prompted)<br/>"
+            "3. Install <b>Termux</b> + <b>Termux:Boot</b> from F-Droid/Play Store<br/>"
+            "4. In Termux, run these exact commands:<br/>"
+            "<code style='color:#00d9a5;'>su -c \"setprop service.adb.tcp.port 5555; setprop persist.adb.tcp.port 5555; "
+            "setprop service.adb.tcp.bind 0.0.0.0; stop adbd && start adbd\"</code><br/>"
+            "5. Create Termux:Boot script: <code style='color:#00d9a5;'>~/.termux/boot/99-adb-wifi.sh</code><br/>"
+            "   (See GitHub wiki for full script - makes ADB persistent across reboots)<br/>"
+            "6. Whitelist from battery optimization:<br/>"
+            "<code style='color:#00d9a5;'>su -c \"cmd appops set com.termux RUN_IN_BACKGROUND allow\"</code><br/>"
+            "<code style='color:#00d9a5;'>su -c \"dumpsys deviceidle whitelist +com.termux\"</code><br/><br/>"
+            
+            "<b>🔧 Port Configuration:</b><br/>"
+            "• Heartbeat Port (default 5556): Phone→PC discovery<br/>"
+            "• Discovery Port (default 5557): PC broadcast<br/>"
+            "• ADB Port (default 5555): scrcpy connection<br/>"
+            "Change if ports conflict, then click '🔄 Restart Server'<br/><br/>"
+            
+            "<b>🔁 Restart Buttons:</b><br/>"
+            "• PC: '🔄 Restart Server' - restarts discovery & heartbeat listeners<br/>"
+            "• Phone: '🔄 Restart Connection' - full reconnection reset<br/><br/>"
+            
+            "<b>🔍 Troubleshooting:</b><br/>"
+            "• Phone not found? Check both devices on same network<br/>"
+            "• ADB connection refused? Run Shizuku ADB command on phone<br/>"
+            "• IP cycling? Restart both apps using restart buttons<br/>"
+            "• Black screen on phone? Tap 'Restart Connection' on phone app<br/><br/>"
+            
+            "<b>📱 Shizuku Persistent Setup (Auto on Boot):</b><br/>"
+            "1. Install Termux + Termux:Boot from F-Droid<br/>"
+            "2. Create <code>~/.termux/boot/99-adb-wifi.sh</code> with the script from GitHub wiki<br/>"
+            "3. <code>chmod +x ~/.termux/boot/99-adb-wifi.sh</code><br/>"
+            "4. Run whitelist commands (see GitHub wiki)<br/>"
+            "5. Reboot phone - ADB over WiFi starts automatically!<br/><br/>"
+            
+            "<b>🔗 Links:</b><br/>"
+            "• GitHub: <a href='https://github.com/HenryCarm/ScrcpyUltimateLink' style='color:#00d9a5;'>github.com/HenryCarm/ScrcpyUltimateLink</a><br/>"
+            "• Shizuku: <a href='https://shizuku.rikka.app/' style='color:#00d9a5;'>shizuku.rikka.app</a><br/>"
+            "• Termux:Boot: <a href='https://f-droid.org/packages/com.termux.boot/' style='color:#00d9a5;'>F-Droid</a>"
+        )
+        
+        guide_label = Label(
+            text=guide_text,
+            markup=True,
+            color=TEXT,
+            font_size='13sp',
+            halign='left',
+            valign='top',
+            size_hint_y=None
+        )
+        guide_label.bind(texture_size=lambda instance, value: setattr(instance, 'height', value[1]))
+        guide_label.bind(width=lambda instance, value: setattr(instance, 'text_size', (value, None)))
+        
+        content.add_widget(guide_label)
+        scroll.add_widget(content)
+        layout.add_widget(scroll)
+        
+        back_btn = Button(text="🔙 Back", background_color=(0.2, 0.1, 0.4, 1), color=ACCENT, font_size='18sp', size_hint_y=None, height=60)
+        back_btn.bind(on_press=lambda x: setattr(self.manager, 'current', 'main'))
+        layout.add_widget(back_btn)
+        
+        self.add_widget(layout)
+
 class HeartbeatApp(App):
     def build(self):
         sm = ScreenManager()
         sm.add_widget(MainScreen(name='main'))
         sm.add_widget(SettingsScreen(name='settings'))
+        sm.add_widget(HelpScreen(name='help'))
         return sm
 
 if __name__ == "__main__":
