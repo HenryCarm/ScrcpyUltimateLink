@@ -1,0 +1,12 @@
+Nuitka-Options: Used command line options:
+Nuitka-Options:   --standalone --onefile --enable-plugin=pyqt6 --linux-icon=icon.png main.py
+Nuitka-Plugins:pyqt6: Support for PyQt6 is not perfect, e.g. Qt threading does not work, so prefer PySide6 if you can.
+Nuitka: Starting Python compilation with:
+Nuitka:   Version '4.1.1' on Python 3.12 (flavor 'Debian Python') commercial grade 'not installed'.
+Nuitka-Plugins:anti-bloat: Not including '_json' automatically in order to avoid bloat, but this may cause: may slow down by using fallback implementation.
+Nuitka-Plugins:pyqt6: Including Qt plugins 'egldeviceintegrations,iconengines,imageformats,platforms,platformthemes,printsupport,tls,wayland-decoration-client,wayland-graphics-integration-client,wayland-shell-integration,xcbglintegrations' below 'PyQt6/Qt6/plugins'.
+Nuitka: Completed Python level compilation and optimization.
+Nuitka: Generating source code for C backend compiler.
+Nuitka: Running data composer tool for optimal constant value handling.
+Nuitka: Running C compilation via Scons.
+Nuitka-Scons: Backend C compiler: gcc (gcc 13).
