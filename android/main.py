@@ -15,15 +15,15 @@ from kivy.graphics import Color, Rectangle
 try:
     from android.permissions import request_permissions, Permission
     from android import api_version
-    from android.activity import PythonActivity
     from jnius import autoclass
-    
-    # Request basic permissions
+
+    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    Environment = autoclass('android.os.Environment')
+
     perms = [Permission.INTERNET, Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
     request_permissions(perms)
-    
-    # On Android 11+ (API 30+), request MANAGE_EXTERNAL_STORAGE via system settings
-    if api_version >= 30:
+
+    if api_version >= 30 and not Environment.isExternalStorageManager():
         try:
             Intent = autoclass('android.content.Intent')
             Settings = autoclass('android.provider.Settings')
@@ -39,11 +39,9 @@ except Exception as e:
 # 2. Dynamic Config & Logging Paths - fallback to internal storage if external not available
 def get_storage_dirs():
     """Get available storage directories, preferring external but falling back to internal"""
-    # Use app's internal data directory (writable without permissions)
     try:
-        from android import PythonActivity
         from jnius import autoclass
-        Context = autoclass('android.content.Context')
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
         internal_dir = PythonActivity.mActivity.getFilesDir().getAbsolutePath()
     except:
         # Fallback for testing outside Android
