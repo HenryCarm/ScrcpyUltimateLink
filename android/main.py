@@ -39,7 +39,15 @@ except Exception as e:
 # 2. Dynamic Config & Logging Paths - fallback to internal storage if external not available
 def get_storage_dirs():
     """Get available storage directories, preferring external but falling back to internal"""
-    internal_dir = os.path.join(os.path.expanduser("~"), "scrcpy_link")
+    # Use app's internal data directory (writable without permissions)
+    try:
+        from android import PythonActivity
+        from jnius import autoclass
+        Context = autoclass('android.content.Context')
+        internal_dir = PythonActivity.mActivity.getFilesDir().getAbsolutePath()
+    except:
+        # Fallback for testing outside Android
+        internal_dir = os.path.join(os.path.expanduser("~"), "scrcpy_link")
     external_config = "/sdcard/scrcpy_heartbeat_config.json"
     external_log_dir = "/sdcard/log"
     
