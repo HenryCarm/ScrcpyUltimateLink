@@ -1,0 +1,88 @@
+name: Cloud Build & Auto-Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v4.26.7)'
+        required: true
+        default: 'v4.26.7'
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    container: ghcr.io/kivy/buildozer:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build APK with Buildozer
+        run: yes | buildozer android debug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: bin/*.apk
+
+  build-pc:
+    name: Build PC Nuitka Binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install nuitka PyQt6 requests pyjnius
+
+      - name: Compile PC Binary with Nuitka
+        run: python3 -m nuitka --standalone --onefile --enable-plugin=pyqt6 --linux-icon=icon.png --output-filename=ScrcpyUltimateLink-Linux-x86_64 main.py
+
+      - name: Upload PC Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pc-binary
+          path: ScrcpyUltimateLink-Linux-x86_64
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-android, build-pc]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./release-assets
+
+      - name: Display downloaded assets
+        run: ls -la -R ./release-assets
+
+      - name: Create GitHub Release & Attach Binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name != '' && github.ref_name || github.event.inputs.tag_name }}
+          name: Scrcpy Ultimate Link ${{ github.ref_name != '' && github.ref_name || github.event.inputs.tag_name }}
+          body: |
+            ## Automated Cloud Release
+            Both the PC binary and Android APK were automatically compiled in the cloud by GitHub Actions!
+
+            ### Download Instructions:
+            - **PC (Linux):** Download `ScrcpyUltimateLink-Linux-x86_64`, give it execute permissions (`chmod +x`), and run it!
+            - **Android:** Download the `.apk` file and install it on your phone!
+          files: |
+            ./release-assets/android-apk/*.apk
+            ./release-assets/pc-binary/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
