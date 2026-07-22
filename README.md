@@ -1,6 +1,6 @@
 # Scrcpy Ultimate Link (Dark Green Edition)
 
-An A-Level, zero-config, cross-platform wireless screen mirroring and control suite built on top of **Scrcpy v4.0+**, featuring an automated Android **Shizuku / Root Heartbeat client** and a modern **PyQt6 Tabbed Desktop GUI**.
+A zero-config, cross-platform wireless screen mirroring and control suite built on top of **Scrcpy v4.0+**, featuring an automated Android **Shizuku / Root Heartbeat client** and a close to modern **PyQt6 Tabbed Desktop GUI**.
 
 ---
 
