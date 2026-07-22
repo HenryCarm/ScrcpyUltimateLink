@@ -1,2 +1,0 @@
-/home/henry/Documents/Projects/Python/ScrcpyUltimateLink/main.py:96: DeprecationWarning: app() is deprecated since version 0.80.0. Use run() instead.
-  ft.app(target=main)

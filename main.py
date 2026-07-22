@@ -20,7 +20,7 @@ def load_config():
         "heartbeat_port": 5556,
         "discovery_port": 5557,
         "adb_port": 5555,
-        "scrcpy_bin": "/home/henry/Apps/scrcpy/scrcpy",
+        "scrcpy_bin": "scrcpy",
         "last_ip_file": os.path.join(APP_DIR, "last_ip.txt"),
         "log_file": os.path.join(APP_DIR, "ScrcpyUltimateLink_debug.log")
     }
