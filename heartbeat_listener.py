@@ -1,5 +1,6 @@
 import socket
 import subprocess
+import sys
 import os
 import time
 import threading
@@ -7,29 +8,29 @@ import json
 import shutil
 from datetime import datetime
 
-# Load config from file (with defaults)
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+APP_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
+CONFIG_FILE = os.path.join(APP_DIR, "config.json")
 
 def load_config():
-    home_dir = os.path.expanduser("~")
     defaults = {
         "heartbeat_port": 5556,
         "discovery_port": 5557,
         "adb_port": 5555,
-        "scrcpy_bin": "scrcpy",  # Let the system PATH find scrcpy natively on Win/Mac/Linux
-        "last_ip_file": os.path.join(home_dir, "Desktop", "last_ip.txt"),
-        "log_file": os.path.join(home_dir, "ScrcpyUltimateLink_debug.log")
+        "scrcpy_bin": "/home/henry/Apps/scrcpy/scrcpy",
+        "last_ip_file": os.path.join(APP_DIR, "last_ip.txt"),
+        "log_file": os.path.join(APP_DIR, "ScrcpyUltimateLink_debug.log")
     }
     try:
-        with open(CONFIG_FILE, "r") as f:
-            config = json.load(f)
-        # Merge with defaults
-        for k, v in defaults.items():
-            if k not in config:
-                config[k] = v
-        return config
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                config = json.load(f)
+            for k, v in defaults.items():
+                if k not in config:
+                    config[k] = v
+            return config
     except:
-        return defaults
+        pass
+    return defaults
 
 def save_config(config):
     try:

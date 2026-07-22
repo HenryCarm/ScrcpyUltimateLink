@@ -140,8 +140,11 @@ def enable_shizuku_wireless_adb():
         
     # Try unrooted rish (Supports both standard and thedjchi forks)
     try:
+        pkg_name = "org.henry.scrcpy.scrcpyheartbeat"
+        env = os.environ.copy()
+        env["RISH_APPLICATION_ID"] = pkg_name
         unrooted_cmd = "setprop service.adb.tcp.port 5555; setprop ctl.restart adbd; adb tcpip 5555; cmd appops set moe.shizuku.privileged.api RUN_IN_BACKGROUND allow 2>/dev/null; cmd appops set com.thedjchi.shizuku RUN_IN_BACKGROUND allow 2>/dev/null"
-        subprocess.run(["rish", "-c", unrooted_cmd], check=False, timeout=5)
+        subprocess.run(["rish", "-c", unrooted_cmd], check=False, timeout=5, env=env)
         app_log("Success: Shizuku rish (unrooted/thedjchi)")
     except Exception as e:
         app_log(f"Shizuku rish failed: {e}")
