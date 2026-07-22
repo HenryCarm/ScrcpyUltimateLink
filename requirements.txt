@@ -1,0 +1,3 @@
+nuitka
+PyQt6
+requests
